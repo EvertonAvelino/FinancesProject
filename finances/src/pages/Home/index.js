@@ -1,28 +1,51 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useState, useEffect } from 'react';
+import { format } from 'date-fns';
 
+import firebase from '../../service/firebaseConnection'
 import { AuthContext } from '../../contexts/auth';
 import Header from '../../components/Header';
 import { Background, Container, Nome, Saldo, Title, List } from './styles'
 import HistoricoList from '../../components/HistoricoList';
+import { parseMoeda } from '../../components/Utilitarios';
 
 export default function Home() {
-	const [historico, setHistorico] = useState([
-		{ key: '1', tipo: 'receita', valor: 1200 },
-		{ key: '2', tipo: 'despesa', valor: 200 },
-		{ key: '3', tipo: 'despesa', valor: 89.90 },
-		{ key: '4', tipo: 'receita', valor: 500 },
-		{ key: '5', tipo: 'despesa', valor: 90.99 },
-		{ key: '6', tipo: 'despesa', valor: 150 },
-	])
+	const [historico, setHistorico] = useState([]);
+	const [saldo, setSaldo] = useState(0);
 
 	const { user } = useContext(AuthContext);
+	const uid = user && user.uid;
+
+	useEffect(() => {
+		async function loadList() {
+			await firebase.database().ref('users').child(uid).on('value', (snapshot) => {
+				setSaldo(snapshot.val().saldo);
+			});
+			await firebase.database().ref('historico')
+				.child(uid)
+				.orderByChild('date').equalTo(format(new Date, 'dd/MM/yy'))
+				.limitToLast(10).on('value', (snapshot) => {
+					setHistorico([]);
+
+					snapshot.forEach((childItem) => {
+						let list = {
+							key: childItem.key,
+							tipo: childItem.val().tipo,
+							valor: childItem.val().valor
+						}
+						setHistorico(oldArray => [...oldArray, list].reverse())
+					})
+				})
+
+		}
+		loadList();
+	}, [])
 
 	return (
 		<Background>
 			<Header />
 			<Container>
 				<Nome>{user && user.nome}</Nome>
-				<Saldo>R$12000,00</Saldo>
+				<Saldo>R$ {parseMoeda(saldo)}</Saldo>
 			</Container>
 			<Title>Ultimas Movimentações</Title>
 			<List
